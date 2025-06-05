@@ -1,9 +1,9 @@
-name: Deploy to EC2 IIS Server
+name: Deploy Hello World to Windows IIS
 
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
@@ -13,28 +13,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Zip source files
-      run: |
-        zip -r deploy.zip . -x "*.git*" "*.github*"
-
-    - name: Upload zip to EC2 (requires OpenSSH or SCP)
-      uses: appleboy/scp-action@v0.1.4
+    - name: Upload and deploy via SSH
+      uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.IIS_SERVER }}
         username: ${{ secrets.IIS_USERNAME }}
-        password: ${{ secrets.IIS_PASSWORD }}
-        port: 5986
-        source: deploy.zip
-        target: C:\Users\${{ secrets.IIS_USERNAME }}
-
-    - name: Unzip and deploy on IIS (via WinRM)
-      uses: azure/winrm@v1
-      with:
-        hostname: ${{ secrets.IIS_SERVER }}
-        username: ${{ secrets.IIS_USERNAME }}
-        password: ${{ secrets.IIS_PASSWORD }}
-        port: 5986
-        protocol: https
-        commands: |
-          Remove-Item -Recurse -Force C:\inetpub\wwwroot\*
-          Expand-Archive -Path C:\Users\${{ secrets.IIS_USERNAME }}\deploy.zip -DestinationPath C:\inetpub\wwwroot
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          powershell -Command "
+            Remove-Item -Path 'C:\inetpub\wwwroot\*' -Recurse -Force;
+            New-Item -Path 'C:\inetpub\wwwroot\index.html' -ItemType File -Force;
+            Set-Content -Path 'C:\inetpub\wwwroot\index.html' -Value @'
+            <!DOCTYPE html>
+            <html><head><title>Hello</title></head><body><h1>Hello World from GitHub Actions!</h1></body></html>
+            '@
+          "
