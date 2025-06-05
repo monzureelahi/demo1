@@ -3,35 +3,21 @@ name: Deploy to EC2 IIS Server
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
-    name: Deploy via WinRM to IIS
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout source
+    - name: Checkout code
       uses: actions/checkout@v3
 
     - name: Zip source files
       run: |
-        zip -r deploy.zip . -x \"*.git*\" \"*.github*\"
+        zip -r deploy.zip . -x "*.git*" "*.github*"
 
-    - name: Copy zip to EC2 IIS Server
-      uses: gsoft-inc/ssh-action@v0.1.0
-      with:
-        host: ${{ secrets.IIS_SERVER }}
-        username: ${{ secrets.IIS_USERNAME }}
-        password: ${{ secrets.IIS_PASSWORD }}
-        port: 5986
-        script: |
-          Invoke-Command -ComputerName $env:HOST -ScriptBlock {
-            Remove-Item C:\\inetpub\\wwwroot\\* -Recurse -Force
-            Expand-Archive -Path C:\\Users\\${{ secrets.IIS_USERNAME }}\\deploy.zip -DestinationPath C:\\inetpub\\wwwroot
-          }
-
-    - name: Upload zip via WinRM
+    - name: Upload zip to EC2 (requires OpenSSH or SCP)
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.IIS_SERVER }}
@@ -39,4 +25,16 @@ jobs:
         password: ${{ secrets.IIS_PASSWORD }}
         port: 5986
         source: deploy.zip
-        target: C:\\Users\\${{ secrets.IIS_USERNAME }}
+        target: C:\Users\${{ secrets.IIS_USERNAME }}
+
+    - name: Unzip and deploy on IIS (via WinRM)
+      uses: azure/winrm@v1
+      with:
+        hostname: ${{ secrets.IIS_SERVER }}
+        username: ${{ secrets.IIS_USERNAME }}
+        password: ${{ secrets.IIS_PASSWORD }}
+        port: 5986
+        protocol: https
+        commands: |
+          Remove-Item -Recurse -Force C:\inetpub\wwwroot\*
+          Expand-Archive -Path C:\Users\${{ secrets.IIS_USERNAME }}\deploy.zip -DestinationPath C:\inetpub\wwwroot
